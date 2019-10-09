@@ -102,13 +102,13 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 
 func getConfigMap(conf interface{})(m map[string]string){
-	vonfigVal := conf.(map[string]interface{})
+	configVal := conf.(map[string]interface{})
 
 	fmt.Println("Printing the conf value ", conf)
 	fmt.Println("type of conf is ", reflect.TypeOf(conf))
 
 	mapString := make(map[string]string)
-	for key, value := range vonfigVal{
+	for key, value := range configVal{
 		strKey := fmt.Sprintf("%v", key)
 		strValue := fmt.Sprintf("%v", value)
 
@@ -202,23 +202,55 @@ func create_volume(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Printing configMap value ", configMap)
 	pbMapForCreateVol := make(map[string]interface{})
 	pbMapForCreateVol["name"] = mapCreateVolRequest["name"]
-	pbMapForCreateVol["size"] = mapCreateVolRequest["size"]
+	//pbMapForCreateVol["cpg"] = mapCreateVolRequest["cpg"]
+	sizeInt := mapCreateVolRequest["size"]
+	pbMapForCreateVol["sizeMiB"] = sizeInt
 	config := mapCreateVolRequest["config"]
 	//err1 := json.Unmarshal()
 
 	configMap = getConfigMap(config)
 	fmt.Println("Receiveed Config map is ", config)
 	fmt.Println("Printing the configMap", config)
-	fmt.Println("tpvv is ", configMap["tpvv"])
-	fmt.Println("compression is ", configMap["compression"])
+	pbMapForCreateVol["cpg"] = configMap["cpg"]
+	tpvv_string := configMap["tpvv"]
+	var tpvv = true
+	if tpvv_string == "true"{
+		tpvv = true
+	}
+
+	fmt.Println("tpvv is ", tpvv)
+	// fmt.Println("compression is ", configMap["compression"])
+	arrayIP := configMap["arrayIp"]
+	fmt.Println("Printing array ip ", arrayIP)
+	pbMapForCreateVol["tpvv"] = tpvv
 	fmt.Println("I am printing the type of config ", reflect.TypeOf(config))
 	fmt.Println("printing  the name received ", pbMapForCreateVol["name"])
 	fmt.Println("I am printing the pbMapForCreateVol: \n ", pbMapForCreateVol)
 	//fmt.Println("Type of config resuest is ", reflect.TypeOf(pbMapForCreateVol["cpg"]))
-
+	mapPBCreateVol, _ := json.Marshal(pbMapForCreateVol)
+	postBodyCreateVolString := string(mapPBCreateVol)
+	fmt.Println("post_body_map_string is ", postBodyCreateVolString)
 	//construct create uri for volume
-	response, err := HttpSessionPost("","")
+	// https://15.212.196.158:8080/api/v1/volumes
+	createVolURI := "https://" + arrayIP + ":8080/api/v1/volumes"
+	response, err := HttpSessionPost(createVolURI, postBodyCreateVolString)
 	fmt.Println("response for create Vol call is ", response)
+	fmt.Println("Response body for create volume call is ", response.Body())
+	fmt.Println("Response status is : ", response.Status())
+	VolCreateResponseMap := make(map[string]interface{})
+	VolCreateResponseMap["name"] = ""
+	VolCreateResponseMap["size"] = ""
+	VolCreateResponseMap["description"] = ""
+	configResp := make(map[string]interface{})
+	configResp["tpvv"] = ""
+	configResp["cpg"] = ""
+	VolCreateResponseMap["config"] = configResp
+	mapVolCreateResponse, _ := json.Marshal(VolCreateResponseMap)
+	CreateVolResponseString := string(mapVolCreateResponse)
+	fmt.Println("CreateVolResponseString is ", CreateVolResponseString)
+	//createvolResBody := make(map[string]interface{})
+	//json.Unmarshal(response.Body(), createvolResBody)
+
 }
 
 
