@@ -49,6 +49,47 @@ var token_struct Token
 // var tokenResponseStruct TokenResponse
 var Tokens []Token
 
+func get_vol_by_id(w http.ResponseWriter, r *http.Request){
+	fmt.Println("I am in get volume by id call")
+	fmt.Println("This REST endpoint is : /containers/v1/volumes/{id} ")
+	sessKey := r.Header.Get("x-auth-token")
+	uriString := r.RequestURI
+	fmt.Println("Passed uri string is ", uriString)
+	fmt.Println("Session key string is ", sessKey)
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	reqB := string(reqBody)
+	fmt.Println("Received request for create volume in string form is : %v", reqB)
+
+	mapCreateVolRequest := make(map[string]interface{})
+	err := json.Unmarshal(reqBody, &mapCreateVolRequest)
+	if err != nil {
+		fmt.Println("Error is : ", err)
+	}
+}
+
+func HttpRestyGet(URI string) (*resty.Response, error){
+	client := resty.New()
+
+	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	//fmt.Println("Body : ", postBody)
+	//fmt.Println("I have got the seesion key: ")
+
+	headerMap := make(map[string]string)
+	sess_key := session_key.Key
+	headerMap["X-HP3PAR-WSAPI-SessionKey"] = sess_key
+	headerMap["Content-type"] = "application/json"
+	resp, err := client.R().
+		SetHeaders(headerMap).
+		//SetBody([]byte(postBody)).
+		// SetResult(&AuthSuccess{}).
+		Get(URI)
+
+	if err != nil {
+		return nil, err
+	} else {
+		return resp, nil
+	}
+}
 func HttpSessionPost(URI string, postBody string) (*resty.Response, error) {
 
 	client := resty.New()
@@ -232,11 +273,32 @@ func create_volume(w http.ResponseWriter, r *http.Request){
 	fmt.Println("post_body_map_string is ", postBodyCreateVolString)
 	//construct create uri for volume
 	// https://15.212.196.158:8080/api/v1/volumes
+
 	createVolURI := "https://" + arrayIP + ":8080/api/v1/volumes"
 	response, err := HttpSessionPost(createVolURI, postBodyCreateVolString)
 	fmt.Println("response for create Vol call is ", response)
-	fmt.Println("Response body for create volume call is ", response.Body())
+
+	//createResponseBody := make(map[string]interface{})
+	//json.Unmarshal(response.Body(), createResponseBody)
+	//fmt.Println("Response body in map form  for create volume call is ", createResponseBody)
 	fmt.Println("Response status is : ", response.Status())
+	resBodyCreateVolString := make(map[string]interface{})
+	if response.Status() == "201 Created"{
+		getVolByNameString := "https://15.212.192.252:8080/api/v1/volumes/"
+		volName := mapCreateVolRequest["name"].(string)
+		getVolByNameUri := getVolByNameString + volName
+		response1, err1 := HttpRestyGet(getVolByNameUri)
+		fmt.Println("Printing response status of getvolcall : ", response1.Status())
+		if err != nil {
+			fmt.Println("Received some error and error is :", err1)
+		}
+		fmt.Println("Response for get vol is :", response1.Body())
+		err2 := json.Unmarshal(response1.Body(), &resBodyCreateVolString)
+		if err2 != nil {
+			fmt.Println("Error is : ", err)
+		}
+		fmt.Println("Response for get vol after unmarshal is :", resBodyCreateVolString)
+	}
 	VolCreateResponseMap := make(map[string]interface{})
 	VolCreateResponseMap["name"] = ""
 	VolCreateResponseMap["size"] = ""
@@ -258,6 +320,7 @@ func create_array_session(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("This REST endpoint is : /containers/v1/tokens")
 	fmt.Println("This function is invoked only when it is a POST call against this end point")
+	fmt.Println("Printing the content type from header", r.Header.Get("Content-Type"))
 	reqBody, _ := ioutil.ReadAll(r.Body)
 	reqB := string(reqBody)
 	fmt.Println("Received request in string form is : %v", reqB)
@@ -362,11 +425,11 @@ func get_all_tokens(w http.ResponseWriter, r *http.Request) {
 
 func handleRequest() {
 	myRouter := mux.NewRouter().StrictSlash(true)
-
 	myRouter.HandleFunc("/", homePage)
 	myRouter.HandleFunc("/containers/v1/tokens", create_array_session).Methods("POST")
 	myRouter.HandleFunc("/containers/v1/volumes", create_volume).Methods("POST")
 	// myRouter.HandleFunc("/csp/containers/v1/volumes/{id}")
+	myRouter.HandleFunc("/containers/v1/volumes/{id}", get_vol_by_id).Methods("GET")
 	myRouter.HandleFunc("/alltokens", get_all_tokens)
 	// fmt.Println("Received response is %v", string(tokenStringValue))
 	err := http.ListenAndServe(":10000", myRouter)
