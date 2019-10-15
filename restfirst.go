@@ -53,6 +53,94 @@ var headerArrayIp string
 // var tokenResponseStruct TokenResponse
 var Tokens []Token
 
+func delete_vol_by_id(w http.ResponseWriter, r *http.Request){
+	sessKey = r.Header.Get("x-auth-token")
+	headerArrayIp = r.Header.Get("x-array-ip")
+	uriString := r.RequestURI
+	uriSplit := strings.Split(uriString, "/")
+	volUUID := uriSplit[4]
+	//reqBody, _ := ioutil.ReadAll(r.Body)
+	query := "query=\"uuid EQ " + volUUID + "\""
+	fmt.Println("Printing query ", query)
+	encodedQuery := url.PathEscape(query)
+	fmt.Println("Encoded query is : ", encodedQuery)
+	getVolUri := "https://" + headerArrayIp + ":8080/api/v1/volumes?" + encodedQuery
+	fmt.Println("Get volume query string uri is ", getVolUri)
+	getResp, err := HttpRestyGet(getVolUri)
+	if err != nil {
+		fmt.Println("Error is : ", err)
+	}
+	fmt.Println("Printing status of get response ", getResp.Status())
+	mapGetVolRequest := make(map[string]interface{})
+	err2 := json.Unmarshal(getResp.Body(), &mapGetVolRequest)
+	if err2 != nil {
+		fmt.Println("Error is : ", err2)
+	}
+	var volName string
+	for k, v := range mapGetVolRequest {
+		fmt.Println("\n Key is ", k)
+		fmt.Println("\n Value is ", v)
+		vt := reflect.TypeOf(v)
+		switch vt.Kind() {
+		case reflect.String:
+			fmt.Println("value of key %s is of time string", k)
+		case reflect.Slice:
+			fmt.Println("Printing vt ", vt)
+			fmt.Println("value of key %s is of type slice", k)
+			fmt.Println("Printing the slice values ")
+			for index, itemCopy  := range v.([]interface{}){
+				fmt.Println("Index is ", index)
+				fmt.Println("itemCopy is ", itemCopy)
+				itemValueType := reflect.TypeOf(itemCopy)
+				fmt.Println("For key, type is %s ", itemValueType)
+				switch itemValueType.Kind(){
+				case reflect.Map:
+					for k1, v1 := range itemCopy.(map[string]interface{}){
+						fmt.Println("I am printing Key ", k1)
+						fmt.Println("I am printing Value ", v1)
+						if k1 == "name" {
+							volName = v1.(string)
+						}
+					}
+				}
+			}
+		case reflect.Map:
+			vmap := v.(map[string]interface{})
+			for confKey, confVal := range vmap {
+				confValType := reflect.TypeOf(confVal)
+				switch confValType.Kind() {
+				case reflect.String:
+					fmt.Println("Inside Map, this is a string type for key %s ", confKey)
+				case reflect.Map:
+					if confKey == "name" {
+						fmt.Println("Printing the name of volume", confVal)
+						volName = confVal.(string)
+					}
+				case reflect.Bool:
+					fmt.Println("Inside Map, this is a boolean type for key %s ", confKey)
+				default:
+					fmt.Println("Inside Map, this is some other type for key %s ", confKey)
+				}
+			}
+			fmt.Println("value for key %s is of map type", k)
+		default:
+			fmt.Println("Some other type for key %s ", k)
+		}
+	}
+	fmt.Println("Printing name of the volume after for loop %s", volName)
+
+	deleteUrl := "https://" + headerArrayIp + ":8080/api/v1/volumes/" + volName
+	fmt.Println("DELETE url for volume is ", deleteUrl)
+
+	deleteResp, delErr := HttpRestyDelete(deleteUrl)
+	if delErr != nil{
+		fmt.Println("Error after delete call is : ", delErr)
+	}
+	fmt.Println("status of delete rest call is ", deleteResp.Status())
+
+
+}
+
 func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 	fmt.Println("I am in get volume by id call")
 	fmt.Println("This REST endpoint is : /containers/v1/volumes/{id} ")
@@ -149,6 +237,25 @@ func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Printing name of the volume after for loop %s", volName)
 
 
+}
+
+func HttpRestyDelete(URI string) (*resty.Response, error) {
+	client := resty.New()
+	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	headerMap := make(map[string]string)
+	headerMap["X-HP3PAR-WSAPI-SessionKey"] = sessKey
+	headerMap["Content-type"] = "application/json"
+	resp, err := client.R().
+		SetHeaders(headerMap).
+		//SetBody([]byte(postBody)).
+		// SetResult(&AuthSuccess{}).
+		Delete(URI)
+
+	if err != nil {
+		return nil, err
+	} else {
+		return resp, nil
+	}
 }
 
 func HttpRestyGet(URI string) (*resty.Response, error){
@@ -399,6 +506,8 @@ func create_volume(w http.ResponseWriter, r *http.Request){
 	mapVolCreateResponse, _ := json.Marshal(VolCreateResponseMap)
 	CreateVolResponseString := string(mapVolCreateResponse)
 	fmt.Println("CreateVolResponseString is ", CreateVolResponseString)
+	fmt.Fprint(w, string(mapVolCreateResponse))
+	fmt.Fprint(w, VolCreateResponseMap)
 	//createvolResBody := make(map[string]interface{})
 	//json.Unmarshal(response.Body(), createvolResBody)
 
@@ -519,10 +628,12 @@ func handleRequest() {
 	myRouter.HandleFunc("/containers/v1/volumes", create_volume).Methods("POST")
 	// myRouter.HandleFunc("/csp/containers/v1/volumes/{id}")
 	myRouter.HandleFunc("/containers/v1/volumes/{id}", get_vol_by_id).Methods("GET")
+	myRouter.HandleFunc("/containers/v1/volumes/{id}", delete_vol_by_id).Methods("DELETE")
 	myRouter.HandleFunc("/alltokens", get_all_tokens)
 	// fmt.Println("Received response is %v", string(tokenStringValue))
 	err := http.ListenAndServe(":10000", myRouter)
 	fmt.Println("Hey there i started REST service")
+
 	if err != nil {
 		log.Fatal("Listen and Serve  ERROR", err)
 	}
