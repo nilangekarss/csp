@@ -180,6 +180,20 @@ func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 	}
 	fmt.Println("Here Response for get vol after unmarshal is :", mapGetVolRequest)
 	var volName string
+	var volId string
+	//var volSize int
+	//var volDescription string
+	var volBaseSnapshotId  float64
+	var volClone bool
+	volPublished := false
+	var volProvType float64 //{1:"FULL", 2:"TPVV", 3:"SNP", 4:"PEER", 5:"UNKNOWN", 6:"TDVV", 7:"DDS"}
+	var volComprState float64 //{1:compression is enabled, 2:compression is disabled, 3:compression is turned off, 4:compression is not available}
+	var volUserCpg string
+	var volCopyType float64 //{1:"BASE", 2:"PHYSICAL_COPY", 3:"VIRTUAL COPY"}
+	var volSizeMiB float64
+
+	resultMapGetVol := make(map[string]interface{})
+
 	for k, v := range mapGetVolRequest {
 		fmt.Println("\n Key is ", k)
 		fmt.Println("\n Value is ", v)
@@ -198,6 +212,41 @@ func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 				fmt.Println("For key, type is %s ", itemValueType)
 				switch itemValueType.Kind(){
 				case reflect.Map:
+
+					if k == "members"{
+						memberMap := itemCopy.(map[string]interface{})
+						volName = memberMap["name"].(string)
+						volId = memberMap["uuid"].(string)
+						volSizeMiB = memberMap["sizeMiB"].(float64)
+						//volDescription = memberMap[""].(string)
+						volBaseSnapshotId = memberMap["baseId"].(float64)
+						volCopyType = memberMap["copyType"].(float64)
+						if volCopyType == 2 {
+							volClone = true
+						} else {
+							volClone = false
+						}
+						volProvType = memberMap["provisioningType"].(float64)
+						volComprState = memberMap["compressionState"].(float64)
+						volUserCpg = memberMap["uuid"].(string)
+
+
+						resultMapGetVol["name"] = volName
+						resultMapGetVol["id"] = volId
+						resultMapGetVol["size"] = volSizeMiB
+						resultMapGetVol["description"] = "No description"
+						resultMapGetVol["base_snapshot_id"] = volBaseSnapshotId
+						resultMapGetVol["clone"] = volClone
+						resultMapGetVol["published"] = volPublished
+						confMap := make(map[string]interface{})
+
+						confMap["provisioning"] = volProvType
+						confMap["compression"] = volComprState
+						confMap["userCpg"] = volUserCpg
+						resultMapGetVol["config"] = confMap
+
+						fmt.Println("Printing memberMap ", resultMapGetVol)
+					}
 					for k1, v1 := range itemCopy.(map[string]interface{}){
 						fmt.Println("I am printing Key ", k1)
 						fmt.Println("I am printing Value ", v1)
@@ -207,7 +256,6 @@ func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 					}
 				}
 			}
-
 
 		case reflect.Map:
 			vmap := v.(map[string]interface{})
@@ -235,7 +283,7 @@ func get_vol_by_id(w http.ResponseWriter, r *http.Request){
 	//volName := mapGetVolRequest["name"].(string)
 	//volName2 := volName.(string)
 	fmt.Println("Printing name of the volume after for loop %s", volName)
-
+	fmt.Fprintln(w, resultMapGetVol)
 
 }
 
